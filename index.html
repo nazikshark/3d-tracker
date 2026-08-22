@@ -8,7 +8,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Filament">
 <meta name="theme-color" content="#0B0B0F">
-<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">
+<meta name="msapplication-TileImage" content="logo.jpeg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/jpeg" href="logo.jpeg">
+<link rel="apple-touch-icon" href="logo.jpeg">
+<link rel="apple-touch-icon-precomposed" href="logo.jpeg">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root{
@@ -98,7 +102,7 @@
     grid-template-columns: repeat(4, minmax(0,1fr));
     gap: 8px;
   }
-  .spool-card{ position:relative; height:130px; touch-action:pan-y; }
+  .spool-card{ position:relative; height:130px; touch-action:none; }
   .spool-flange-abs{
     position:absolute; top:50%; transform:translateY(-50%);
     width:5px; height:118px;
@@ -649,8 +653,8 @@
   var MOVE_THRESHOLD = 10;
 
   var drag = {
-    active:false, armed:false, canceled:false,
-    id:null, startX:0, startY:0, startTime:0,
+    active:false, armed:false, canceled:false, scrolling:false,
+    id:null, startX:0, startY:0, startTime:0, prevY:0,
     timer:null, clone:null, origEl:null, offsetX:0, offsetY:0
   };
 
@@ -665,8 +669,9 @@
     var card = e.currentTarget;
     drag.id = card.dataset.id;
     drag.startX = e.clientX; drag.startY = e.clientY;
+    drag.prevY = e.clientY;
     drag.startTime = Date.now();
-    drag.armed = false; drag.active = false; drag.canceled = false;
+    drag.armed = false; drag.active = false; drag.canceled = false; drag.scrolling = false;
     drag.origEl = card;
 
     clearTimeout(drag.timer);
@@ -689,10 +694,20 @@
     var dist = Math.sqrt(dx*dx + dy*dy);
 
     if(!drag.armed && !drag.active){
+      // Cards use touch-action:none, so the browser never scrolls them natively —
+      // once movement looks like a swipe (before the long-press arms), we scroll manually.
+      if(drag.scrolling){
+        window.scrollBy(0, drag.prevY - e.clientY);
+        drag.prevY = e.clientY;
+        return;
+      }
       if(dist > MOVE_THRESHOLD){
         drag.canceled = true;
+        drag.scrolling = true;
         clearTimeout(drag.timer);
         if(drag.origEl) drag.origEl.classList.remove('card-armed');
+        window.scrollBy(0, drag.prevY - e.clientY);
+        drag.prevY = e.clientY;
       }
       return;
     }
@@ -756,7 +771,7 @@
     document.getElementById('amsZone').classList.remove('drop-highlight');
     document.getElementById('storageZone').classList.remove('drop-highlight');
 
-    drag = { active:false, armed:false, canceled:false, id:null, startX:0, startY:0, startTime:0, timer:null, clone:null, origEl:null, offsetX:0, offsetY:0 };
+    drag = { active:false, armed:false, canceled:false, scrolling:false, id:null, startX:0, startY:0, startTime:0, prevY:0, timer:null, clone:null, origEl:null, offsetX:0, offsetY:0 };
   }
 
   function finishDrag(e){
