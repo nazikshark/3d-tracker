@@ -4,15 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Filament AMS</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Filament AMS">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Filament">
 <meta name="theme-color" content="#0B0B0F">
-<meta name="msapplication-TileImage" content="logo.jpeg">
+<meta name="background-color" content="#0B0B0F">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/jpeg" href="logo.jpeg">
+<link rel="icon" href="logo.jpeg" type="image/jpeg">
 <link rel="apple-touch-icon" href="logo.jpeg">
-<link rel="apple-touch-icon-precomposed" href="logo.jpeg">
+<link rel="mask-icon" href="logo.jpeg" color="#FF6A13">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root{
@@ -216,8 +218,10 @@
       <label class="text-xs font-medium" style="color:var(--sub)">Цвет</label>
       <div class="flex items-center gap-3 mt-1.5">
         <input type="color" id="colorInput" value="#FF6A13" class="w-14 h-14 rounded-2xl">
-        <div class="flex-1 flex flex-wrap gap-2" id="presetColors"></div>
+        <input id="hexInput" type="text" placeholder="#FF6A13" maxlength="7"
+          class="w-28 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none uppercase" style="color:var(--text)">
       </div>
+      <div class="flex-1 flex flex-wrap gap-2 mt-3" id="presetColors"></div>
       <input id="colorName" type="text" placeholder="Название цвета (необязательно)"
         class="w-full mt-3 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none" style="color:var(--text)">
     </div>
@@ -250,11 +254,17 @@
   "use strict";
 
   /* ---------- CONFIG ---------- */
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    });
+  }
   var MATERIAL_DAYS = { PLA:90, PETG:120, ABS:180, ASA:180, TPU:14 };
   var MATERIAL_LABEL = { PLA:"PLA", PETG:"PETG", ABS:"ABS", ASA:"ASA", TPU:"TPU" };
   var BRAND_SHORT = { Bambulab:"Bambu Lab", Generic:"Generic" };
   var DAY_MS = 24*60*60*1000;
-  var PRESET_COLORS = ["#FF6A13","#1C1C1E","#F5F5F7","#FF3B30","#34C759","#0A84FF","#FFD60A","#AF52DE","#8E8E93","#5AC8FA"];
+  var PRESET_COLORS = ["#FF6A13","#1C1C1E","#F5F5F7","#FF3B30","#34C759","#0A84FF","#FFD60A","#AF52DE","#8E8E93","#5AC8FA","#A0522D"];
   var STORAGE_KEY = "ams_filament_state_v1";
 
   /* ---------- STATE ---------- */
@@ -387,6 +397,7 @@
     formShore = spool ? (spool.shore || "95A") : "95A";
     document.getElementById('formTitle').textContent = spool ? "Изменить катушку" : "Новая катушка";
     document.getElementById('colorInput').value = spool ? spool.color : PRESET_COLORS[0];
+    document.getElementById('hexInput').value = (spool ? spool.color : PRESET_COLORS[0]).toUpperCase();
     document.getElementById('colorName').value = spool && spool.colorName ? spool.colorName : "";
     syncFormButtons();
     formOverlay.classList.remove('hidden');
@@ -420,9 +431,27 @@
       return '<button type="button" class="preset-swatch w-7 h-7 rounded-full border border-white/20" data-c="'+c+'" style="background:'+c+';"></button>';
     }).join('');
     wrap.querySelectorAll('.preset-swatch').forEach(function(sw){
-      sw.addEventListener('click', function(){ document.getElementById('colorInput').value = sw.dataset.c; });
+      sw.addEventListener('click', function(){
+        document.getElementById('colorInput').value = sw.dataset.c;
+        document.getElementById('hexInput').value = sw.dataset.c.toUpperCase();
+      });
     });
   })();
+
+  var HEX_RE = /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/;
+
+  document.getElementById('colorInput').addEventListener('input', function(){
+    document.getElementById('hexInput').value = this.value.toUpperCase();
+  });
+
+  document.getElementById('hexInput').addEventListener('input', function(){
+    var v = this.value.trim();
+    if(!v.startsWith('#')) v = '#' + v;
+    this.value = v.toUpperCase();
+    if(HEX_RE.test(v)){
+      document.getElementById('colorInput').value = v;
+    }
+  });
 
   document.getElementById('addBtn').addEventListener('click', function(){ openForm(null); });
   document.getElementById('formCancel').addEventListener('click', closeForm);
