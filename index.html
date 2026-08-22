@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Filament AMS</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Filament">
+<meta name="theme-color" content="#0B0B0F">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --bg:#0B0B0F;
+    --bg2:#121216;
+    --surface: rgba(255,255,255,0.055);
+    --surface-strong: rgba(255,255,255,0.09);
+    --stroke: rgba(255,255,255,0.09);
+    --orange:#FF6A13;
+    --orange2:#FF8A3D;
+    --green:#34C759;
+    --amber:#FF9F0A;
+    --red:#FF3B30;
+    --text:#F5F5F7;
+    --sub:#9A9AA2;
+  }
+  *{ -webkit-tap-highlight-color: transparent; box-sizing:border-box; }
+  html,body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(255,106,19,0.14), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    overscroll-behavior-y: none;
+    height:100%;
+  }
+  body{
+    padding-top: env(safe-area-inset-top);
+  }
+  ::-webkit-scrollbar{ display:none; }
+  .glass{
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+  .glass-strong{
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+  .spool-flange{
+    background: linear-gradient(180deg,#fff, #d8d8dd);
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .card-armed{ transform: scale(0.96); transition: transform .18s ease; filter: brightness(1.05); }
+  .card-ghost{ opacity: 0.28; }
+  .drop-highlight{
+    outline: 2px dashed var(--orange);
+    outline-offset: -2px;
+    background: rgba(255,106,19,0.08) !important;
+  }
+  .drag-clone{
+    position: fixed;
+    top:0; left:0;
+    z-index: 9999;
+    pointer-events: none;
+    transform-origin: center;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.55);
+    transition: none;
+  }
+  .pulse-red{ animation: pulseRed 1.6s ease-in-out infinite; }
+  @keyframes pulseRed{
+    0%,100%{ box-shadow: 0 0 0 0 rgba(255,59,48,0.5); }
+    50%{ box-shadow: 0 0 0 6px rgba(255,59,48,0); }
+  }
+  .sheet{ transition: transform .38s cubic-bezier(.32,.72,0,1); }
+  .sheet-hidden{ transform: translateY(100%); }
+  .fade{ transition: opacity .25s ease; }
+  .menu-pop{
+    transition: transform .16s cubic-bezier(.32,.72,0,1), opacity .16s ease;
+    transform-origin: top center;
+  }
+  .btn-press:active{ transform: scale(0.96); }
+  .toast{ transition: transform .35s cubic-bezier(.32,.72,0,1), opacity .35s ease; }
+  input[type="color"]{ -webkit-appearance: none; appearance: none; border:none; padding:0; background:none; }
+  input[type="color"]::-webkit-color-swatch-wrapper{ padding:0; }
+  input[type="color"]::-webkit-color-swatch{ border:none; border-radius:12px; }
+  .seg-btn{ transition: all .15s ease; }
+  .seg-btn.active{ background: var(--orange); color:#0B0B0F; font-weight:600; }
+  .empty-slot{ border: 1.5px dashed rgba(255,255,255,0.16); }
+
+  .spool-grid{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 8px;
+  }
+  .spool-card{ position:relative; height:130px; touch-action:pan-y; }
+  .spool-flange-abs{
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:5px; height:118px;
+  }
+  .info-block{
+    position:absolute; top:50%; left:11px; right:11px; height:100px;
+    transform:translateY(-50%);
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:7px; border-radius:12px; overflow:hidden;
+  }
+</style>
+</head>
+<body class="min-h-screen select-none">
+
+<!-- HEADER -->
+<div class="sticky top-0 z-30 px-4 pt-3 pb-2" style="padding-top:calc(env(safe-area-inset-top) + 10px);">
+  <h1 class="text-2xl font-bold tracking-tight">Филамент</h1>
+  <p class="text-xs" style="color:var(--sub)">AMS и склад катушек</p>
+</div>
+
+<!-- AMS PANEL -->
+<div class="px-4 mt-2">
+  <div id="amsZone" data-dropzone="ams" class="glass-strong rounded-3xl p-3 transition-colors duration-150">
+    <div class="flex items-center justify-between mb-2.5 px-1">
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full" style="background:var(--orange)"></div>
+        <span class="text-sm font-semibold tracking-wide">AMS</span>
+      </div>
+      <span id="amsCount" class="text-xs" style="color:var(--sub)">0 / 4</span>
+    </div>
+    <div id="amsSlots" class="spool-grid"></div>
+  </div>
+</div>
+
+<!-- STORAGE -->
+<div class="px-4 mt-6 pb-32">
+  <div class="flex items-center justify-between mb-2.5 px-1">
+    <div class="flex items-center gap-2">
+      <div class="w-2 h-2 rounded-full" style="background:var(--sub)"></div>
+      <span class="text-sm font-semibold tracking-wide">Склад</span>
+    </div>
+    <span id="storageCount" class="text-xs" style="color:var(--sub)">0 катушек</span>
+  </div>
+  <div id="storageZone" data-dropzone="storage" class="spool-grid min-h-[140px] rounded-3xl p-1 transition-colors duration-150"></div>
+  <div id="emptyState" class="hidden flex flex-col items-center justify-center py-16 text-center" style="color:var(--sub)">
+    <div class="text-4xl mb-2">🧵</div>
+    <p class="text-sm">Склад пуст.<br>Добавьте первую катушку.</p>
+  </div>
+</div>
+
+<!-- BOTTOM ADD BUTTON -->
+<div class="fixed left-0 right-0 bottom-0 z-30 px-4" style="padding-bottom:calc(env(safe-area-inset-bottom) + 14px); padding-top:10px; background:linear-gradient(0deg, var(--bg) 55%, transparent);">
+  <button id="addBtn" class="btn-press w-full py-4 rounded-2xl text-base font-semibold flex items-center justify-center gap-2"
+    style="background:var(--orange); color:#0B0B0F; box-shadow:0 10px 28px rgba(255,106,19,0.35);">
+    <span class="text-xl leading-none">+</span><span>Добавить катушку</span>
+  </button>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="menuOverlay" class="fixed inset-0 z-40 hidden"></div>
+<div id="ctxMenu" class="fixed z-50 hidden menu-pop glass-strong rounded-2xl overflow-hidden w-52" style="opacity:0; transform:scale(.9);">
+  <button data-action="ams" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
+    <span class="w-5 text-center">📦</span><span id="ctxAmsLabel">Поместить в AMS</span>
+  </button>
+  <div class="h-px bg-white/10"></div>
+  <button data-action="dry" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
+    <span class="w-5 text-center">☀️</span><span>Просушить</span>
+  </button>
+  <div class="h-px bg-white/10"></div>
+  <button data-action="edit" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
+    <span class="w-5 text-center">✏️</span><span>Изменить</span>
+  </button>
+  <div class="h-px bg-white/10"></div>
+  <button data-action="delete" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10" style="color:var(--red)">
+    <span class="w-5 text-center">🗑️</span><span>Удалить</span>
+  </button>
+</div>
+
+<!-- ADD / EDIT SHEET -->
+<div id="formOverlay" class="fixed inset-0 z-40 bg-black/60 hidden fade" style="opacity:0;"></div>
+<div id="formSheet" class="fixed left-0 right-0 bottom-0 z-50 sheet sheet-hidden">
+  <div class="glass-strong rounded-t-3xl p-5 pb-8 mx-auto max-w-md" style="background:var(--bg2); padding-bottom:calc(env(safe-area-inset-bottom) + 24px); max-height:88vh; overflow-y:auto;">
+    <div class="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-4"></div>
+    <h2 id="formTitle" class="text-lg font-bold mb-4">Новая катушка</h2>
+
+    <label class="text-xs font-medium" style="color:var(--sub)">Бренд</label>
+    <div class="grid grid-cols-2 gap-2 mt-1.5 mb-4">
+      <button type="button" data-field="brand" data-value="Bambulab" class="seg-btn py-2.5 rounded-xl text-sm glass">Bambulab</button>
+      <button type="button" data-field="brand" data-value="Generic" class="seg-btn py-2.5 rounded-xl text-sm glass">Generic</button>
+    </div>
+
+    <label class="text-xs font-medium" style="color:var(--sub)">Материал</label>
+    <div id="materialGrid" class="grid grid-cols-3 gap-2 mt-1.5 mb-1">
+      <button type="button" data-field="material" data-value="PLA" class="seg-btn py-2.5 rounded-xl text-sm glass">PLA</button>
+      <button type="button" data-field="material" data-value="PETG" class="seg-btn py-2.5 rounded-xl text-sm glass">PETG</button>
+      <button type="button" data-field="material" data-value="ABS" class="seg-btn py-2.5 rounded-xl text-sm glass">ABS</button>
+      <button type="button" data-field="material" data-value="ASA" class="seg-btn py-2.5 rounded-xl text-sm glass">ASA</button>
+      <button type="button" data-field="material" data-value="TPU" class="seg-btn py-2.5 rounded-xl text-sm glass">TPU</button>
+    </div>
+
+    <div id="shoreWrap" class="hidden mb-4 mt-2">
+      <label class="text-xs font-medium" style="color:var(--sub)">Твёрдость TPU</label>
+      <div class="grid grid-cols-3 gap-2 mt-1.5">
+        <button type="button" data-field="shore" data-value="95A" class="seg-btn py-2 rounded-xl text-sm glass">95A</button>
+        <button type="button" data-field="shore" data-value="90A" class="seg-btn py-2 rounded-xl text-sm glass">90A</button>
+        <button type="button" data-field="shore" data-value="85A" class="seg-btn py-2 rounded-xl text-sm glass">85A</button>
+      </div>
+    </div>
+
+    <div class="mb-4 mt-4">
+      <label class="text-xs font-medium" style="color:var(--sub)">Цвет</label>
+      <div class="flex items-center gap-3 mt-1.5">
+        <input type="color" id="colorInput" value="#FF6A13" class="w-14 h-14 rounded-2xl">
+        <div class="flex-1 flex flex-wrap gap-2" id="presetColors"></div>
+      </div>
+      <input id="colorName" type="text" placeholder="Название цвета (необязательно)"
+        class="w-full mt-3 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none" style="color:var(--text)">
+    </div>
+
+    <div class="flex gap-3 mt-6">
+      <button id="formCancel" class="btn-press flex-1 py-3 rounded-2xl text-sm font-medium glass">Отмена</button>
+      <button id="formSave" class="btn-press flex-1 py-3 rounded-2xl text-sm font-semibold" style="background:var(--orange); color:#0B0B0F;">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- SLOT PICKER MODAL (only used from context menu when AMS is full) -->
+<div id="slotPickerOverlay" class="fixed inset-0 z-40 bg-black/60 hidden fade" style="opacity:0;"></div>
+<div id="slotPickerModal" class="fixed inset-0 z-50 hidden items-center justify-center px-6">
+  <div class="glass-strong rounded-3xl p-5 w-full max-w-sm" style="background:var(--bg2);">
+    <h3 class="text-base font-bold mb-1">AMS занят</h3>
+    <p class="text-xs mb-4" style="color:var(--sub)">Выберите слот для замены</p>
+    <div id="slotPickerList" class="flex flex-col gap-2"></div>
+    <button id="slotPickerCancel" class="btn-press w-full mt-4 py-3 rounded-2xl text-sm font-medium glass">Отмена</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="fixed left-1/2 z-[9999] px-4 py-2.5 rounded-2xl text-sm font-medium glass-strong toast"
+  style="bottom:calc(env(safe-area-inset-bottom) + 90px); transform:translate(-50%, 140%); opacity:0; background:var(--bg2);">
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- CONFIG ---------- */
+  var MATERIAL_DAYS = { PLA:90, PETG:120, ABS:180, ASA:180, TPU:14 };
+  var MATERIAL_LABEL = { PLA:"PLA", PETG:"PETG", ABS:"ABS", ASA:"ASA", TPU:"TPU" };
+  var BRAND_SHORT = { Bambulab:"Bambu Lab", Generic:"Generic" };
+  var DAY_MS = 24*60*60*1000;
+  var PRESET_COLORS = ["#FF6A13","#1C1C1E","#F5F5F7","#FF3B30","#34C759","#0A84FF","#FFD60A","#AF52DE","#8E8E93","#5AC8FA"];
+  var STORAGE_KEY = "ams_filament_state_v1";
+
+  /* ---------- STATE ---------- */
+  var spools = [];
+  var editingId = null;
+  var formBrand = "Bambulab";
+  var formMaterial = "PLA";
+  var formShore = "95A";
+  var ctxTargetId = null;
+  var pendingAmsSpoolId = null;
+
+  /* ---------- PERSISTENCE ---------- */
+  function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(spools)); }
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ spools = JSON.parse(raw) || []; }
+    }catch(e){ spools = []; }
+  }
+
+  /* ---------- HELPERS ---------- */
+  function uid(){ return 'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function fullDurationMs(material){ return (MATERIAL_DAYS[material]||90) * DAY_MS; }
+  function getEffectiveRemaining(sp){
+    if(sp.inAMS) return sp.remainingMs;
+    return sp.remainingMs - (Date.now() - sp.lastUpdate);
+  }
+  function freezeAt(sp){ sp.remainingMs = getEffectiveRemaining(sp); sp.lastUpdate = Date.now(); }
+
+  function shortRemaining(sp){
+    var eff = getEffectiveRemaining(sp);
+    if(eff <= 0) return { text:"Сушить", urgent:true };
+    var days = eff / DAY_MS;
+    if(days < 1){ var h = Math.max(1, Math.round(eff/3600000)); return { text: h+"ч", urgent:false }; }
+    return { text: Math.ceil(days)+"д", urgent:false };
+  }
+  function urgencyColor(sp){
+    var eff = getEffectiveRemaining(sp);
+    var full = fullDurationMs(sp.material);
+    var pct = eff/full;
+    if(eff <= 0) return "var(--red)";
+    if(pct <= 0.15) return "var(--amber)";
+    return "var(--green)";
+  }
+  function materialDisplay(sp){ return sp.material === "TPU" ? ("TPU " + sp.shore) : MATERIAL_LABEL[sp.material]; }
+  function readableTextColor(hex){
+    try{
+      var c = hex.replace('#','');
+      if(c.length===3){ c = c.split('').map(function(x){return x+x;}).join(''); }
+      var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+      var lum = (0.299*r + 0.587*g + 0.114*b)/255;
+      return lum > 0.6 ? '#111114' : '#F5F5F7';
+    }catch(e){ return '#F5F5F7'; }
+  }
+  function toast(msg){
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.transform = 'translate(-50%, 0)';
+    el.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){
+      el.style.transform = 'translate(-50%, 140%)';
+      el.style.opacity = '0';
+    }, 2000);
+  }
+
+  /* ---------- RENDER ---------- */
+  function render(){ renderAMS(); renderStorage(); save(); }
+
+  function spoolCardHTML(sp){
+    var col = sp.color || '#888';
+    var txt = readableTextColor(col);
+    var rem = shortRemaining(sp);
+    var uColor = urgencyColor(sp);
+    var pulse = rem.urgent ? 'pulse-red rounded-xl' : '';
+    var brandShort = BRAND_SHORT[sp.brand] || sp.brand;
+
+    return (
+      '<div class="spool-card ' + pulse + '" data-id="'+sp.id+'">' +
+        '<div class="spool-flange-abs" style="left:2px; background:linear-gradient(180deg,#fff,#d8d8dd); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.4);"></div>' +
+        '<div class="spool-flange-abs" style="right:2px; background:linear-gradient(180deg,#fff,#d8d8dd); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.4);"></div>' +
+        '<div class="info-block" style="background:'+col+'; color:'+txt+';">' +
+          '<div>' +
+            '<div class="text-[9px] font-semibold leading-tight opacity-80 truncate">'+brandShort+'</div>' +
+            '<div class="text-[12px] font-bold leading-tight truncate">'+materialDisplay(sp)+'</div>' +
+          '</div>' +
+          '<div class="text-[9px] font-semibold px-1.5 py-0.5 rounded-full self-start" style="background:rgba(0,0,0,0.32); color:'+uColor+';">'+rem.text+'</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderAMS(){
+    var wrap = document.getElementById('amsSlots');
+    var slots = [null,null,null,null];
+    spools.forEach(function(sp){
+      if(sp.inAMS && sp.amsSlot!=null && sp.amsSlot>=0 && sp.amsSlot<4){ slots[sp.amsSlot] = sp; }
+    });
+    var filled = slots.filter(Boolean).length;
+    document.getElementById('amsCount').textContent = filled + ' / 4';
+
+    wrap.innerHTML = slots.map(function(sp, i){
+      if(sp) return spoolCardHTML(sp);
+      return '<div class="empty-slot rounded-xl flex items-center justify-center text-[10px] text-center" style="height:130px; color:var(--sub);" data-empty-slot="'+i+'">Пусто<br>слот '+(i+1)+'</div>';
+    }).join('');
+
+    bindCardEvents(wrap);
+  }
+
+  function renderStorage(){
+    var zone = document.getElementById('storageZone');
+    var list = spools.filter(function(sp){ return !sp.inAMS; });
+    list.sort(function(a,b){ return getEffectiveRemaining(a) - getEffectiveRemaining(b); });
+
+    document.getElementById('storageCount').textContent = list.length + (list.length===1 ? ' катушка' : ' катушек');
+    document.getElementById('emptyState').classList.toggle('hidden', list.length !== 0);
+
+    zone.innerHTML = list.map(function(sp){ return spoolCardHTML(sp); }).join('');
+    bindCardEvents(zone);
+  }
+
+  /* ---------- FORM (ADD/EDIT) ---------- */
+  var formOverlay = document.getElementById('formOverlay');
+  var formSheet = document.getElementById('formSheet');
+
+  function openForm(spool){
+    editingId = spool ? spool.id : null;
+    formBrand = spool ? spool.brand : "Bambulab";
+    formMaterial = spool ? spool.material : "PLA";
+    formShore = spool ? (spool.shore || "95A") : "95A";
+    document.getElementById('formTitle').textContent = spool ? "Изменить катушку" : "Новая катушка";
+    document.getElementById('colorInput').value = spool ? spool.color : PRESET_COLORS[0];
+    document.getElementById('colorName').value = spool && spool.colorName ? spool.colorName : "";
+    syncFormButtons();
+    formOverlay.classList.remove('hidden');
+    formSheet.classList.remove('hidden');
+    requestAnimationFrame(function(){
+      formOverlay.style.opacity = '1';
+      formSheet.classList.remove('sheet-hidden');
+    });
+  }
+  function closeForm(){
+    formOverlay.style.opacity = '0';
+    formSheet.classList.add('sheet-hidden');
+    setTimeout(function(){
+      formOverlay.classList.add('hidden');
+      formSheet.classList.add('hidden');
+    }, 380);
+  }
+  function syncFormButtons(){
+    document.querySelectorAll('[data-field="brand"]').forEach(function(b){ b.classList.toggle('active', b.dataset.value === formBrand); });
+    document.querySelectorAll('[data-field="material"]').forEach(function(b){ b.classList.toggle('active', b.dataset.value === formMaterial); });
+    document.querySelectorAll('[data-field="shore"]').forEach(function(b){ b.classList.toggle('active', b.dataset.value === formShore); });
+    document.getElementById('shoreWrap').classList.toggle('hidden', formMaterial !== 'TPU');
+  }
+  document.querySelectorAll('[data-field="brand"]').forEach(function(b){ b.addEventListener('click', function(){ formBrand = b.dataset.value; syncFormButtons(); }); });
+  document.querySelectorAll('[data-field="material"]').forEach(function(b){ b.addEventListener('click', function(){ formMaterial = b.dataset.value; syncFormButtons(); }); });
+  document.querySelectorAll('[data-field="shore"]').forEach(function(b){ b.addEventListener('click', function(){ formShore = b.dataset.value; syncFormButtons(); }); });
+
+  (function initPresets(){
+    var wrap = document.getElementById('presetColors');
+    wrap.innerHTML = PRESET_COLORS.map(function(c){
+      return '<button type="button" class="preset-swatch w-7 h-7 rounded-full border border-white/20" data-c="'+c+'" style="background:'+c+';"></button>';
+    }).join('');
+    wrap.querySelectorAll('.preset-swatch').forEach(function(sw){
+      sw.addEventListener('click', function(){ document.getElementById('colorInput').value = sw.dataset.c; });
+    });
+  })();
+
+  document.getElementById('addBtn').addEventListener('click', function(){ openForm(null); });
+  document.getElementById('formCancel').addEventListener('click', closeForm);
+  formOverlay.addEventListener('click', closeForm);
+
+  document.getElementById('formSave').addEventListener('click', function(){
+    var color = document.getElementById('colorInput').value || PRESET_COLORS[0];
+    var colorName = document.getElementById('colorName').value.trim();
+
+    if(editingId){
+      var sp = spools.find(function(s){ return s.id === editingId; });
+      if(sp){
+        var newFull = fullDurationMs(formMaterial);
+        var eff = getEffectiveRemaining(sp);
+        sp.brand = formBrand;
+        sp.material = formMaterial;
+        sp.shore = formMaterial === 'TPU' ? formShore : null;
+        sp.color = color;
+        sp.colorName = colorName;
+        sp.remainingMs = Math.min(eff, newFull);
+        sp.lastUpdate = Date.now();
+      }
+      toast('Катушка обновлена');
+    } else {
+      spools.push({
+        id: uid(), brand: formBrand, material: formMaterial,
+        shore: formMaterial === 'TPU' ? formShore : null,
+        color: color, colorName: colorName,
+        inAMS: false, amsSlot: null,
+        remainingMs: fullDurationMs(formMaterial), lastUpdate: Date.now()
+      });
+      toast('Катушка добавлена');
+    }
+    closeForm();
+    render();
+  });
+
+  /* ---------- CONTEXT MENU ---------- */
+  var ctxMenu = document.getElementById('ctxMenu');
+  var menuOverlay = document.getElementById('menuOverlay');
+
+  function openMenu(spoolId, anchorRect){
+    ctxTargetId = spoolId;
+    var sp = spools.find(function(s){ return s.id === spoolId; });
+    if(!sp) return;
+    document.getElementById('ctxAmsLabel').textContent = sp.inAMS ? 'Убрать из AMS' : 'Поместить в AMS';
+
+    menuOverlay.classList.remove('hidden');
+    ctxMenu.classList.remove('hidden');
+
+    var menuW = 208;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var centerX = anchorRect.left + anchorRect.width/2;
+    var left;
+    if(centerX < vw/2){ left = Math.min(anchorRect.right + 10, vw - menuW - 12); }
+    else { left = Math.max(anchorRect.left - menuW - 10, 12); }
+    var top = Math.min(anchorRect.top, vh - 230);
+    top = Math.max(top, 12);
+
+    ctxMenu.style.left = left + 'px';
+    ctxMenu.style.top = top + 'px';
+
+    requestAnimationFrame(function(){
+      ctxMenu.style.opacity = '1';
+      ctxMenu.style.transform = 'scale(1)';
+    });
+  }
+  function closeMenu(){
+    ctxMenu.style.opacity = '0';
+    ctxMenu.style.transform = 'scale(.9)';
+    setTimeout(function(){
+      ctxMenu.classList.add('hidden');
+      menuOverlay.classList.add('hidden');
+    }, 160);
+  }
+  menuOverlay.addEventListener('click', closeMenu);
+
+  ctxMenu.querySelectorAll('button[data-action]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var action = btn.dataset.action;
+      var sp = spools.find(function(s){ return s.id === ctxTargetId; });
+      closeMenu();
+      if(!sp) return;
+
+      if(action === 'delete'){
+        spools = spools.filter(function(s){ return s.id !== sp.id; });
+        toast('Катушка удалена');
+        render();
+      } else if(action === 'edit'){
+        openForm(sp);
+      } else if(action === 'dry'){
+        sp.remainingMs = fullDurationMs(sp.material);
+        sp.lastUpdate = Date.now();
+        toast('Катушка просушена');
+        render();
+      } else if(action === 'ams'){
+        if(sp.inAMS){
+          moveToStorage(sp.id);
+          toast('Убрано из AMS');
+          render();
+        } else {
+          placeFromMenu(sp.id);
+        }
+      }
+    });
+  });
+
+  /* ---------- AMS PLACEMENT LOGIC ---------- */
+  function moveToStorage(id){
+    var sp = spools.find(function(s){ return s.id === id; });
+    if(!sp) return;
+    freezeAt(sp);
+    sp.inAMS = false;
+    sp.amsSlot = null;
+  }
+
+  function placeInSlot(id, slotIndex){
+    var occupant = spools.find(function(s){ return s.inAMS && s.amsSlot === slotIndex && s.id !== id; });
+    if(occupant){ moveToStorage(occupant.id); }
+    var sp = spools.find(function(s){ return s.id === id; });
+    if(!sp.inAMS){ freezeAt(sp); }
+    sp.inAMS = true;
+    sp.amsSlot = slotIndex;
+  }
+
+  // Used only by the context-menu "Поместить в AMS" action (no drop position available)
+  function placeFromMenu(id){
+    var occupied = [false,false,false,false];
+    spools.forEach(function(s){ if(s.inAMS && s.amsSlot!=null){ occupied[s.amsSlot] = true; } });
+    var emptySlots = [];
+    occupied.forEach(function(v,i){ if(!v) emptySlots.push(i); });
+
+    if(emptySlots.length > 0){
+      placeInSlot(id, emptySlots[0]);
+      toast('Катушка помещена в AMS');
+      render();
+    } else {
+      openSlotPicker(id);
+    }
+  }
+
+  // Used for drag & drop: resolves to the nearest slot under the pointer.
+  // If that slot is occupied, swaps (AMS<->AMS) or replaces it directly (storage->AMS) — no dialog.
+  function resolveAmsDrop(id, targetSlot){
+    var dragged = spools.find(function(s){ return s.id === id; });
+    if(!dragged) return;
+    var occupant = spools.find(function(s){ return s.inAMS && s.amsSlot === targetSlot && s.id !== id; });
+    var wasInAMS = dragged.inAMS;
+    var originSlot = dragged.amsSlot;
+
+    if(occupant){
+      if(wasInAMS && originSlot != null){
+        occupant.amsSlot = originSlot; // swap places
+      } else {
+        moveToStorage(occupant.id); // replace directly, occupant goes to storage
+      }
+    }
+    if(!wasInAMS){ freezeAt(dragged); }
+    dragged.inAMS = true;
+    dragged.amsSlot = targetSlot;
+  }
+
+  function nearestSlotIndex(clientX){
+    var slotEls = document.querySelectorAll('#amsSlots > div');
+    var best = 0, bestDist = Infinity;
+    slotEls.forEach(function(el, i){
+      var r = el.getBoundingClientRect();
+      var c = r.left + r.width/2;
+      var d = Math.abs(c - clientX);
+      if(d < bestDist){ bestDist = d; best = i; }
+    });
+    return best;
+  }
+
+  function dropOntoAMS(id, clientX){
+    var slot = nearestSlotIndex(clientX);
+    var dragged = spools.find(function(s){ return s.id === id; });
+    if(dragged.inAMS && dragged.amsSlot === slot){ render(); return; }
+    resolveAmsDrop(id, slot);
+    toast(dragged.inAMS ? 'Слоты обновлены' : 'Катушка помещена в AMS');
+    render();
+  }
+
+  /* ---------- SLOT PICKER MODAL (menu-only fallback) ---------- */
+  var slotPickerOverlay = document.getElementById('slotPickerOverlay');
+  var slotPickerModal = document.getElementById('slotPickerModal');
+
+  function openSlotPicker(newSpoolId){
+    pendingAmsSpoolId = newSpoolId;
+    var list = document.getElementById('slotPickerList');
+    var html = '';
+    for(var i=0;i<4;i++){
+      var occ = spools.find(function(s){ return s.inAMS && s.amsSlot === i; });
+      html += '<button data-slot="'+i+'" class="btn-press flex items-center justify-between px-4 py-3 rounded-2xl text-sm glass">' +
+        '<span>Слот '+(i+1)+'</span>' +
+        '<span style="color:var(--sub)">'+(occ ? (occ.brand + ' · ' + materialDisplay(occ)) : 'Пусто')+'</span>' +
+      '</button>';
+    }
+    list.innerHTML = html;
+    list.querySelectorAll('button[data-slot]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var slot = parseInt(b.dataset.slot, 10);
+        placeInSlot(pendingAmsSpoolId, slot);
+        toast('Катушка заменена в слоте ' + (slot+1));
+        closeSlotPicker();
+        render();
+      });
+    });
+    slotPickerOverlay.classList.remove('hidden');
+    slotPickerModal.classList.remove('hidden');
+    slotPickerModal.classList.add('flex');
+    requestAnimationFrame(function(){ slotPickerOverlay.style.opacity = '1'; });
+  }
+  function closeSlotPicker(){
+    slotPickerOverlay.style.opacity = '0';
+    setTimeout(function(){
+      slotPickerOverlay.classList.add('hidden');
+      slotPickerModal.classList.add('hidden');
+      slotPickerModal.classList.remove('flex');
+    }, 200);
+    pendingAmsSpoolId = null;
+  }
+  document.getElementById('slotPickerCancel').addEventListener('click', closeSlotPicker);
+  slotPickerOverlay.addEventListener('click', closeSlotPicker);
+
+  /* ---------- DRAG & DROP (Pointer Events, iOS-friendly) ---------- */
+  var ARM_DELAY = 160;
+  var MOVE_THRESHOLD = 10;
+
+  var drag = {
+    active:false, armed:false, canceled:false,
+    id:null, startX:0, startY:0, startTime:0,
+    timer:null, clone:null, origEl:null, offsetX:0, offsetY:0
+  };
+
+  function bindCardEvents(container){
+    container.querySelectorAll('.spool-card').forEach(function(card){
+      card.addEventListener('pointerdown', onPointerDown);
+    });
+  }
+
+  function onPointerDown(e){
+    if(e.button !== undefined && e.button !== 0) return;
+    var card = e.currentTarget;
+    drag.id = card.dataset.id;
+    drag.startX = e.clientX; drag.startY = e.clientY;
+    drag.startTime = Date.now();
+    drag.armed = false; drag.active = false; drag.canceled = false;
+    drag.origEl = card;
+
+    clearTimeout(drag.timer);
+    drag.timer = setTimeout(function(){
+      if(!drag.canceled){
+        drag.armed = true;
+        card.classList.add('card-armed');
+        if(navigator.vibrate) navigator.vibrate(8);
+      }
+    }, ARM_DELAY);
+
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerUp);
+  }
+
+  function onPointerMove(e){
+    if(!drag.id) return;
+    var dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+
+    if(!drag.armed && !drag.active){
+      if(dist > MOVE_THRESHOLD){
+        drag.canceled = true;
+        clearTimeout(drag.timer);
+        if(drag.origEl) drag.origEl.classList.remove('card-armed');
+      }
+      return;
+    }
+    if(drag.armed && !drag.active){ startDrag(e); }
+    if(drag.active){ e.preventDefault(); moveDrag(e); }
+  }
+
+  function startDrag(e){
+    drag.active = true;
+    var card = drag.origEl;
+    card.classList.remove('card-armed');
+    var rect = card.getBoundingClientRect();
+    drag.offsetX = rect.width/2;
+    drag.offsetY = rect.height/2;
+
+    var clone = card.cloneNode(true);
+    clone.classList.add('drag-clone');
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    clone.style.left = (e.clientX - drag.offsetX) + 'px';
+    clone.style.top = (e.clientY - drag.offsetY) + 'px';
+    clone.style.transform = 'scale(1.08) rotate(-2deg)';
+    document.body.appendChild(clone);
+    drag.clone = clone;
+
+    card.classList.add('card-ghost');
+    document.getElementById('amsZone').classList.add('drop-highlight');
+    document.getElementById('storageZone').classList.add('drop-highlight');
+  }
+
+  function moveDrag(e){
+    if(!drag.clone) return;
+    drag.clone.style.left = (e.clientX - drag.offsetX) + 'px';
+    drag.clone.style.top = (e.clientY - drag.offsetY) + 'px';
+  }
+
+  function onPointerUp(e){
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointercancel', onPointerUp);
+    clearTimeout(drag.timer);
+
+    if(drag.active){
+      finishDrag(e);
+    } else if(!drag.canceled && drag.id){
+      var dt = Date.now() - drag.startTime;
+      var dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+      var dist = Math.sqrt(dx*dx+dy*dy);
+      if(dist < MOVE_THRESHOLD){
+        var el = drag.origEl;
+        el.classList.remove('card-armed');
+        var rect = el.getBoundingClientRect();
+        openMenu(drag.id, rect);
+      }
+    }
+
+    if(drag.origEl){
+      drag.origEl.classList.remove('card-armed');
+      drag.origEl.classList.remove('card-ghost');
+    }
+    document.getElementById('amsZone').classList.remove('drop-highlight');
+    document.getElementById('storageZone').classList.remove('drop-highlight');
+
+    drag = { active:false, armed:false, canceled:false, id:null, startX:0, startY:0, startTime:0, timer:null, clone:null, origEl:null, offsetX:0, offsetY:0 };
+  }
+
+  function finishDrag(e){
+    var id = drag.id;
+    if(drag.clone && drag.clone.parentNode){ drag.clone.parentNode.removeChild(drag.clone); }
+
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    var zone = el ? el.closest('[data-dropzone]') : null;
+    var sp = spools.find(function(s){ return s.id === id; });
+    if(!sp || !zone){ render(); return; }
+
+    var type = zone.dataset.dropzone;
+    if(type === 'ams'){
+      dropOntoAMS(id, e.clientX);
+    } else if(type === 'storage'){
+      if(sp.inAMS){
+        moveToStorage(id);
+        toast('Катушка перемещена на склад');
+      }
+      render();
+    } else {
+      render();
+    }
+  }
+
+  /* ---------- INIT ---------- */
+  load();
+  render();
+  setInterval(render, 60000);
+
+})();
+</script>
+</body>
+</html>
