@@ -2,13 +2,10 @@
   "name": "Filament AMS",
   "short_name": "Filament",
   "description": "AMS and spool tracker app",
-  "id": "filament-ams",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#0B0B0F",
   "theme_color": "#0B0B0F",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "logo.jpeg",

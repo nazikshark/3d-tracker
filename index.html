@@ -3,18 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Filament AMS</title>
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="application-name" content="Filament AMS">
+<title>Filament</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Filament">
 <meta name="theme-color" content="#0B0B0F">
-<meta name="background-color" content="#0B0B0F">
+<meta name="msapplication-TileImage" content="logo.jpeg">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="logo.jpeg" type="image/jpeg">
+<link rel="icon" type="image/jpeg" href="logo.jpeg">
 <link rel="apple-touch-icon" href="logo.jpeg">
-<link rel="mask-icon" href="logo.jpeg" color="#FF6A13">
+<link rel="apple-touch-icon-precomposed" href="logo.jpeg">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   :root{
@@ -41,9 +39,7 @@
     overscroll-behavior-y: none;
     height:100%;
   }
-  body{
-    padding-top: env(safe-area-inset-top);
-  }
+  body{ padding-top: env(safe-area-inset-top); }
   ::-webkit-scrollbar{ display:none; }
   .glass{
     background: var(--surface);
@@ -56,11 +52,6 @@
     border: 1px solid var(--stroke);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
-  }
-  .spool-flange{
-    background: linear-gradient(180deg,#fff, #d8d8dd);
-    border-radius: 4px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
   }
   .card-armed{ transform: scale(0.96); transition: transform .18s ease; filter: brightness(1.05); }
   .card-ghost{ opacity: 0.28; }
@@ -99,21 +90,73 @@
   .seg-btn.active{ background: var(--orange); color:#0B0B0F; font-weight:600; }
   .empty-slot{ border: 1.5px dashed rgba(255,255,255,0.16); }
 
+  /* Storage: 4 per row */
   .spool-grid{
     display:grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
     gap: 8px;
   }
+  /* Slots: 2x2, filled column by column:
+     1 = top-left, 2 = bottom-left, 3 = top-right, 4 = bottom-right */
+  .slots-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    gap: 10px;
+  }
   .spool-card{ position:relative; height:130px; touch-action:none; }
   .spool-flange-abs{
     position:absolute; top:50%; transform:translateY(-50%);
     width:5px; height:118px;
+    background:linear-gradient(180deg,#fff,#d8d8dd);
+    border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.4);
   }
   .info-block{
     position:absolute; top:50%; left:11px; right:11px; height:100px;
     transform:translateY(-50%);
     display:flex; flex-direction:column; justify-content:space-between;
     padding:7px; border-radius:12px; overflow:hidden;
+  }
+  /* Silk: animated sheen over the filament block */
+  .silk-shine{
+    position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+    background:
+      linear-gradient(115deg, transparent 25%, rgba(255,255,255,0.55) 48%, rgba(255,255,255,0.12) 56%, transparent 72%);
+    background-size: 260% 100%;
+    background-position: 130% 0;
+    mix-blend-mode: soft-light;
+    animation: silkSweep 3.6s ease-in-out infinite;
+  }
+  .silk-shine::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent 45%, rgba(0,0,0,0.14));
+  }
+  @keyframes silkSweep{
+    0%{ background-position: 130% 0; }
+    55%,100%{ background-position: -40% 0; }
+  }
+  .silk-btn{ transition: all .15s ease; }
+  .silk-btn.active{
+    background: linear-gradient(135deg, #FFD60A, #FF9F0A);
+    color:#0B0B0F; font-weight:600; border-color: transparent;
+  }
+  .palette-grid{
+    display:grid;
+    grid-template-columns: repeat(8, minmax(0,1fr));
+    gap: 8px;
+    max-height: 176px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .palette-swatch{
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,0.22);
+  }
+  .palette-swatch.selected{
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
   }
 </style>
 </head>
@@ -122,20 +165,20 @@
 <!-- HEADER -->
 <div class="sticky top-0 z-30 px-4 pt-3 pb-2" style="padding-top:calc(env(safe-area-inset-top) + 10px);">
   <h1 class="text-2xl font-bold tracking-tight">Филамент</h1>
-  <p class="text-xs" style="color:var(--sub)">AMS и склад катушек</p>
+  <p class="text-xs" style="color:var(--sub)">Слоты и склад катушек</p>
 </div>
 
-<!-- AMS PANEL -->
+<!-- SLOTS PANEL -->
 <div class="px-4 mt-2">
-  <div id="amsZone" data-dropzone="ams" class="glass-strong rounded-3xl p-3 transition-colors duration-150">
+  <div id="slotsZone" data-dropzone="slots" class="glass-strong rounded-3xl p-3 transition-colors duration-150">
     <div class="flex items-center justify-between mb-2.5 px-1">
       <div class="flex items-center gap-2">
         <div class="w-2 h-2 rounded-full" style="background:var(--orange)"></div>
-        <span class="text-sm font-semibold tracking-wide">AMS</span>
+        <span class="text-sm font-semibold tracking-wide">Слоты</span>
       </div>
-      <span id="amsCount" class="text-xs" style="color:var(--sub)">0 / 4</span>
+      <span id="slotsCount" class="text-xs" style="color:var(--sub)">0 / 4</span>
     </div>
-    <div id="amsSlots" class="spool-grid"></div>
+    <div id="slotsGrid" class="slots-grid"></div>
   </div>
 </div>
 
@@ -166,8 +209,8 @@
 <!-- CONTEXT MENU -->
 <div id="menuOverlay" class="fixed inset-0 z-40 hidden"></div>
 <div id="ctxMenu" class="fixed z-50 hidden menu-pop glass-strong rounded-2xl overflow-hidden w-52" style="opacity:0; transform:scale(.9);">
-  <button data-action="ams" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
-    <span class="w-5 text-center">📦</span><span id="ctxAmsLabel">Поместить в AMS</span>
+  <button data-action="slot" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
+    <span class="w-5 text-center">📦</span><span id="ctxSlotLabel">Поместить в слот</span>
   </button>
   <div class="h-px bg-white/10"></div>
   <button data-action="dry" class="w-full text-left px-4 py-3 text-sm flex items-center gap-3 active:bg-white/10">
@@ -186,15 +229,22 @@
 <!-- ADD / EDIT SHEET -->
 <div id="formOverlay" class="fixed inset-0 z-40 bg-black/60 hidden fade" style="opacity:0;"></div>
 <div id="formSheet" class="fixed left-0 right-0 bottom-0 z-50 sheet sheet-hidden">
-  <div class="glass-strong rounded-t-3xl p-5 pb-8 mx-auto max-w-md" style="background:var(--bg2); padding-bottom:calc(env(safe-area-inset-bottom) + 24px); max-height:88vh; overflow-y:auto;">
+  <div class="glass-strong rounded-t-3xl p-5 pb-8 mx-auto max-w-md" style="background:var(--bg2); padding-bottom:calc(env(safe-area-inset-bottom) + 24px); max-height:90vh; overflow-y:auto;">
     <div class="w-10 h-1.5 rounded-full bg-white/20 mx-auto mb-4"></div>
     <h2 id="formTitle" class="text-lg font-bold mb-4">Новая катушка</h2>
 
     <label class="text-xs font-medium" style="color:var(--sub)">Бренд</label>
-    <div class="grid grid-cols-2 gap-2 mt-1.5 mb-4">
-      <button type="button" data-field="brand" data-value="Bambulab" class="seg-btn py-2.5 rounded-xl text-sm glass">Bambulab</button>
-      <button type="button" data-field="brand" data-value="Generic" class="seg-btn py-2.5 rounded-xl text-sm glass">Generic</button>
+    <div id="brandGrid" class="grid grid-cols-2 gap-2 mt-1.5 mb-2">
+      <button type="button" data-field="brand" data-value="SnapMaker" class="seg-btn py-2.5 rounded-xl text-sm glass">SnapMaker</button>
+      <button type="button" data-field="brand" data-value="Elegoo" class="seg-btn py-2.5 rounded-xl text-sm glass">Elegoo</button>
+      <button type="button" data-field="brand" data-value="Pochatok" class="seg-btn py-2.5 rounded-xl text-sm glass">Pochatok</button>
+      <button type="button" data-field="brand" data-value="__custom" class="seg-btn py-2.5 rounded-xl text-sm glass">Вписать</button>
     </div>
+    <div id="brandCustomWrap" class="hidden mb-4">
+      <input id="brandCustom" type="text" maxlength="24" placeholder="Название бренда"
+        class="w-full px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none" style="color:var(--text)">
+    </div>
+    <div id="brandSpacer" class="mb-2"></div>
 
     <label class="text-xs font-medium" style="color:var(--sub)">Материал</label>
     <div id="materialGrid" class="grid grid-cols-3 gap-2 mt-1.5 mb-1">
@@ -215,15 +265,18 @@
     </div>
 
     <div class="mb-4 mt-4">
-      <label class="text-xs font-medium" style="color:var(--sub)">Цвет</label>
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-medium" style="color:var(--sub)">Цвет</label>
+        <button type="button" id="silkBtn" class="silk-btn btn-press px-3 py-1.5 rounded-full text-xs glass">✨ Silk</button>
+      </div>
       <div class="flex items-center gap-3 mt-1.5">
-        <input type="color" id="colorInput" value="#FF6A13" class="w-14 h-14 rounded-2xl">
+        <input type="color" id="colorInput" value="#FF6A13" class="w-14 h-14 rounded-2xl shrink-0">
         <input id="hexInput" type="text" placeholder="#FF6A13" maxlength="7"
           class="w-28 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none uppercase" style="color:var(--text)">
+        <input id="colorName" type="text" placeholder="Название цвета"
+          class="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none" style="color:var(--text)">
       </div>
-      <div class="flex-1 flex flex-wrap gap-2 mt-3" id="presetColors"></div>
-      <input id="colorName" type="text" placeholder="Название цвета (необязательно)"
-        class="w-full mt-3 px-3 py-2.5 rounded-xl text-sm glass placeholder-white/30 outline-none" style="color:var(--text)">
+      <div id="paletteGrid" class="palette-grid mt-3"></div>
     </div>
 
     <div class="flex gap-3 mt-6">
@@ -233,11 +286,11 @@
   </div>
 </div>
 
-<!-- SLOT PICKER MODAL (only used from context menu when AMS is full) -->
+<!-- SLOT PICKER MODAL (used from context menu when all slots are full) -->
 <div id="slotPickerOverlay" class="fixed inset-0 z-40 bg-black/60 hidden fade" style="opacity:0;"></div>
 <div id="slotPickerModal" class="fixed inset-0 z-50 hidden items-center justify-center px-6">
   <div class="glass-strong rounded-3xl p-5 w-full max-w-sm" style="background:var(--bg2);">
-    <h3 class="text-base font-bold mb-1">AMS занят</h3>
+    <h3 class="text-base font-bold mb-1">Все слоты заняты</h3>
     <p class="text-xs mb-4" style="color:var(--sub)">Выберите слот для замены</p>
     <div id="slotPickerList" class="flex flex-col gap-2"></div>
     <button id="slotPickerCancel" class="btn-press w-full mt-4 py-3 rounded-2xl text-sm font-medium glass">Отмена</button>
@@ -254,27 +307,45 @@
   "use strict";
 
   /* ---------- CONFIG ---------- */
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
-    });
-  }
   var MATERIAL_DAYS = { PLA:90, PETG:120, ABS:180, ASA:180, TPU:14 };
-  var MATERIAL_LABEL = { PLA:"PLA", PETG:"PETG", ABS:"ABS", ASA:"ASA", TPU:"TPU" };
-  var BRAND_SHORT = { Bambulab:"Bambu Lab", Generic:"Generic" };
+  var BRANDS = ["SnapMaker", "Elegoo", "Pochatok"];
+  var CUSTOM = "__custom";
   var DAY_MS = 24*60*60*1000;
-  var PRESET_COLORS = ["#FF6A13","#1C1C1E","#F5F5F7","#FF3B30","#34C759","#0A84FF","#FFD60A","#AF52DE","#8E8E93","#5AC8FA","#A0522D"];
+
+  // Big palette: [hex, name]
+  var PALETTE = [
+    ["#1C1C1E","Чёрный"], ["#3A3A3C","Графит"], ["#636366","Тёмно-серый"], ["#8E8E93","Серый"],
+    ["#C7C7CC","Светло-серый"], ["#F5F5F7","Белый"], ["#F2EBD9","Слоновая кость"], ["#D9C3A0","Бежевый"],
+
+    ["#FF3B30","Красный"], ["#B3201A","Тёмно-красный"], ["#7A1626","Бордовый"], ["#FF6F61","Коралловый"],
+    ["#F4B6C2","Пудровый"], ["#FF6BA8","Розовый"], ["#FF2D92","Ярко-розовый"], ["#E8B796","Телесный"],
+
+    ["#FF6A13","Оранжевый"], ["#FF9F0A","Янтарный"], ["#D4A017","Золотистый"], ["#FFD60A","Жёлтый"],
+    ["#F5F06A","Лимонный"], ["#A6E22E","Салатовый"], ["#34C759","Зелёный"], ["#1E7B3A","Тёмно-зелёный"],
+
+    ["#6B7B3A","Хаки"], ["#808000","Оливковый"], ["#7FE5C0","Мятный"], ["#1CC8C8","Бирюзовый"],
+    ["#5AC8FA","Голубой"], ["#8CCBF2","Небесный"], ["#0A84FF","Синий"], ["#1F4FD8","Кобальт"],
+
+    ["#123B8C","Тёмно-синий"], ["#4B4ACF","Индиго"], ["#B9A7F0","Лавандовый"], ["#C58AE8","Сиреневый"],
+    ["#AF52DE","Фиолетовый"], ["#8E2DA8","Пурпурный"], ["#8B5A2B","Коричневый"], ["#4E342E","Шоколадный"],
+
+    ["#B87333","Медный"], ["#8C6A2B","Бронзовый"], ["#C0C0C8","Серебро"], ["#C9A24D","Золото"],
+    ["#DDE7EA","Прозрачный"], ["#39FF14","Неон зелёный"], ["#FF10F0","Неон розовый"], ["#FF5F1F","Неон оранжевый"]
+  ];
+
   var STORAGE_KEY = "ams_filament_state_v1";
+  var MIGRATION_KEY = "filament_slots_migrated_v2";
 
   /* ---------- STATE ---------- */
   var spools = [];
   var editingId = null;
-  var formBrand = "Bambulab";
+  var formBrand = BRANDS[0];
   var formMaterial = "PLA";
   var formShore = "95A";
   var ctxTargetId = null;
-  var pendingAmsSpoolId = null;
+  var pendingSlotSpoolId = null;
+  var lastAutoColorName = "";
+  var formSilk = false;
 
   /* ---------- PERSISTENCE ---------- */
   function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(spools)); }
@@ -283,33 +354,49 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if(raw){ spools = JSON.parse(raw) || []; }
     }catch(e){ spools = []; }
+
+    // One-time migration: in the old AMS the timer was paused; now it runs in slots too.
+    try{
+      if(!localStorage.getItem(MIGRATION_KEY)){
+        spools.forEach(function(sp){ if(sp.inAMS){ sp.lastUpdate = Date.now(); } });
+        localStorage.setItem(MIGRATION_KEY, "1");
+      }
+    }catch(e){}
   }
 
   /* ---------- HELPERS ---------- */
   function uid(){ return 'sp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
   function fullDurationMs(material){ return (MATERIAL_DAYS[material]||90) * DAY_MS; }
+
+  // The drying timer always counts down — in a slot and in storage alike.
   function getEffectiveRemaining(sp){
-    if(sp.inAMS) return sp.remainingMs;
     return sp.remainingMs - (Date.now() - sp.lastUpdate);
   }
-  function freezeAt(sp){ sp.remainingMs = getEffectiveRemaining(sp); sp.lastUpdate = Date.now(); }
 
-  function shortRemaining(sp){
+  function remainingText(sp, long){
     var eff = getEffectiveRemaining(sp);
-    if(eff <= 0) return { text:"Сушить", urgent:true };
+    if(eff <= 0) return { text: long ? "Требует сушки" : "Сушить", urgent:true };
     var days = eff / DAY_MS;
-    if(days < 1){ var h = Math.max(1, Math.round(eff/3600000)); return { text: h+"ч", urgent:false }; }
-    return { text: Math.ceil(days)+"д", urgent:false };
+    if(days < 1){
+      var h = Math.max(1, Math.round(eff/3600000));
+      return { text: (long ? "Осталось " : "") + h + (long ? " ч." : "ч"), urgent:false };
+    }
+    var d = Math.ceil(days);
+    return { text: (long ? "Осталось " : "") + d + (long ? " дн." : "д"), urgent:false };
   }
   function urgencyColor(sp){
     var eff = getEffectiveRemaining(sp);
-    var full = fullDurationMs(sp.material);
-    var pct = eff/full;
+    var pct = eff / fullDurationMs(sp.material);
     if(eff <= 0) return "var(--red)";
     if(pct <= 0.15) return "var(--amber)";
     return "var(--green)";
   }
-  function materialDisplay(sp){ return sp.material === "TPU" ? ("TPU " + sp.shore) : MATERIAL_LABEL[sp.material]; }
+  function materialDisplay(sp){ return sp.material === "TPU" ? ("TPU " + sp.shore) : sp.material; }
   function readableTextColor(hex){
     try{
       var c = hex.replace('#','');
@@ -332,43 +419,53 @@
   }
 
   /* ---------- RENDER ---------- */
-  function render(){ renderAMS(); renderStorage(); save(); }
+  function render(){ renderSlots(); renderStorage(); save(); }
 
-  function spoolCardHTML(sp){
+  function spoolCardHTML(sp, big, slotIndex){
     var col = sp.color || '#888';
     var txt = readableTextColor(col);
-    var rem = shortRemaining(sp);
+    var rem = remainingText(sp, big);
     var uColor = urgencyColor(sp);
     var pulse = rem.urgent ? 'pulse-red rounded-xl' : '';
-    var brandShort = BRAND_SHORT[sp.brand] || sp.brand;
+
+    var brandCls = big ? 'text-[11px]' : 'text-[9px]';
+    var matCls   = big ? 'text-[17px]' : 'text-[12px]';
+    var badgeCls = big ? 'text-[11px] px-2 py-1' : 'text-[9px] px-1.5 py-0.5';
 
     return (
-      '<div class="spool-card ' + pulse + '" data-id="'+sp.id+'">' +
-        '<div class="spool-flange-abs" style="left:2px; background:linear-gradient(180deg,#fff,#d8d8dd); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.4);"></div>' +
-        '<div class="spool-flange-abs" style="right:2px; background:linear-gradient(180deg,#fff,#d8d8dd); border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.4);"></div>' +
-        '<div class="info-block" style="background:'+col+'; color:'+txt+';">' +
-          '<div>' +
-            '<div class="text-[9px] font-semibold leading-tight opacity-80 truncate">'+brandShort+'</div>' +
-            '<div class="text-[12px] font-bold leading-tight truncate">'+materialDisplay(sp)+'</div>' +
+      '<div class="spool-card ' + pulse + '" data-id="' + sp.id + '">' +
+        '<div class="spool-flange-abs" style="left:2px;"></div>' +
+        '<div class="spool-flange-abs" style="right:2px;"></div>' +
+        '<div class="info-block" style="background:' + col + '; color:' + txt + ';">' +
+          (sp.silk ? '<div class="silk-shine"></div>' : '') +
+          (big ? '<div style="position:absolute; top:7px; right:9px; font-size:10px; font-weight:700; opacity:.7;">№' + (slotIndex + 1) + '</div>' : '') +
+          (sp.silk ? (big
+            ? '<div style="position:absolute; bottom:6px; right:8px; font-size:15px; line-height:1;">✨</div>'
+            : '<div style="position:absolute; top:5px; right:6px; font-size:12px; line-height:1;">✨</div>') : '') +
+          '<div class="min-w-0">' +
+            '<div class="' + brandCls + ' font-semibold leading-tight opacity-80 truncate">' + esc(sp.brand) + '</div>' +
+            '<div class="' + matCls + ' font-bold leading-tight truncate">' + materialDisplay(sp) + '</div>' +
+            (big && sp.colorName ? '<div class="text-[10px] leading-tight opacity-70 truncate">' + esc(sp.colorName) + '</div>' : '') +
           '</div>' +
-          '<div class="text-[9px] font-semibold px-1.5 py-0.5 rounded-full self-start" style="background:rgba(0,0,0,0.32); color:'+uColor+';">'+rem.text+'</div>' +
+          '<div class="' + badgeCls + ' font-semibold rounded-full self-start whitespace-nowrap" style="background:rgba(0,0,0,0.32); color:' + uColor + ';">' + rem.text + '</div>' +
         '</div>' +
       '</div>'
     );
   }
 
-  function renderAMS(){
-    var wrap = document.getElementById('amsSlots');
+  function renderSlots(){
+    var wrap = document.getElementById('slotsGrid');
     var slots = [null,null,null,null];
     spools.forEach(function(sp){
-      if(sp.inAMS && sp.amsSlot!=null && sp.amsSlot>=0 && sp.amsSlot<4){ slots[sp.amsSlot] = sp; }
+      if(sp.inAMS && sp.amsSlot != null && sp.amsSlot >= 0 && sp.amsSlot < 4){ slots[sp.amsSlot] = sp; }
     });
     var filled = slots.filter(Boolean).length;
-    document.getElementById('amsCount').textContent = filled + ' / 4';
+    document.getElementById('slotsCount').textContent = filled + ' / 4';
 
+    // DOM order 0..3 + grid-auto-flow:column => 1 top-left, 2 bottom-left, 3 top-right, 4 bottom-right
     wrap.innerHTML = slots.map(function(sp, i){
-      if(sp) return spoolCardHTML(sp);
-      return '<div class="empty-slot rounded-xl flex items-center justify-center text-[10px] text-center" style="height:130px; color:var(--sub);" data-empty-slot="'+i+'">Пусто<br>слот '+(i+1)+'</div>';
+      if(sp) return spoolCardHTML(sp, true, i);
+      return '<div class="empty-slot rounded-2xl flex items-center justify-center text-xs text-center" style="height:130px; color:var(--sub);">Пусто<br>слот ' + (i+1) + '</div>';
     }).join('');
 
     bindCardEvents(wrap);
@@ -379,27 +476,65 @@
     var list = spools.filter(function(sp){ return !sp.inAMS; });
     list.sort(function(a,b){ return getEffectiveRemaining(a) - getEffectiveRemaining(b); });
 
-    document.getElementById('storageCount').textContent = list.length + (list.length===1 ? ' катушка' : ' катушек');
+    document.getElementById('storageCount').textContent = list.length + (list.length === 1 ? ' катушка' : ' катушек');
     document.getElementById('emptyState').classList.toggle('hidden', list.length !== 0);
 
-    zone.innerHTML = list.map(function(sp){ return spoolCardHTML(sp); }).join('');
+    zone.innerHTML = list.map(function(sp){ return spoolCardHTML(sp, false, 0); }).join('');
     bindCardEvents(zone);
   }
 
   /* ---------- FORM (ADD/EDIT) ---------- */
   var formOverlay = document.getElementById('formOverlay');
   var formSheet = document.getElementById('formSheet');
+  var colorInput = document.getElementById('colorInput');
+  var hexInput = document.getElementById('hexInput');
+  var colorNameInput = document.getElementById('colorName');
+  var brandCustomInput = document.getElementById('brandCustom');
+
+  var HEX_RE = /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/;
+  function expandHex(v){
+    if(v.length === 4){ return '#' + v[1]+v[1] + v[2]+v[2] + v[3]+v[3]; }
+    return v;
+  }
+
+  function markSelectedSwatch(){
+    var cur = (colorInput.value || '').toLowerCase();
+    document.querySelectorAll('.palette-swatch').forEach(function(sw){
+      sw.classList.toggle('selected', sw.dataset.c.toLowerCase() === cur);
+    });
+  }
+
+  function setColor(hex){
+    colorInput.value = hex;
+    hexInput.value = hex.toUpperCase();
+    markSelectedSwatch();
+  }
 
   function openForm(spool){
     editingId = spool ? spool.id : null;
-    formBrand = spool ? spool.brand : "Bambulab";
     formMaterial = spool ? spool.material : "PLA";
     formShore = spool ? (spool.shore || "95A") : "95A";
+
+    if(spool){
+      if(BRANDS.indexOf(spool.brand) !== -1){
+        formBrand = spool.brand;
+        brandCustomInput.value = "";
+      } else {
+        formBrand = CUSTOM;
+        brandCustomInput.value = spool.brand || "";
+      }
+    } else {
+      formBrand = BRANDS[0];
+      brandCustomInput.value = "";
+    }
+
+    formSilk = spool ? !!spool.silk : false;
     document.getElementById('formTitle').textContent = spool ? "Изменить катушку" : "Новая катушка";
-    document.getElementById('colorInput').value = spool ? spool.color : PRESET_COLORS[0];
-    document.getElementById('hexInput').value = (spool ? spool.color : PRESET_COLORS[0]).toUpperCase();
-    document.getElementById('colorName').value = spool && spool.colorName ? spool.colorName : "";
+    setColor(spool ? spool.color : "#FF6A13");
+    colorNameInput.value = spool && spool.colorName ? spool.colorName : "";
+    lastAutoColorName = "";
     syncFormButtons();
+
     formOverlay.classList.remove('hidden');
     formSheet.classList.remove('hidden');
     requestAnimationFrame(function(){
@@ -420,36 +555,55 @@
     document.querySelectorAll('[data-field="material"]').forEach(function(b){ b.classList.toggle('active', b.dataset.value === formMaterial); });
     document.querySelectorAll('[data-field="shore"]').forEach(function(b){ b.classList.toggle('active', b.dataset.value === formShore); });
     document.getElementById('shoreWrap').classList.toggle('hidden', formMaterial !== 'TPU');
+    document.getElementById('brandCustomWrap').classList.toggle('hidden', formBrand !== CUSTOM);
+    document.getElementById('brandSpacer').classList.toggle('hidden', formBrand === CUSTOM);
+    document.getElementById('silkBtn').classList.toggle('active', formSilk);
   }
-  document.querySelectorAll('[data-field="brand"]').forEach(function(b){ b.addEventListener('click', function(){ formBrand = b.dataset.value; syncFormButtons(); }); });
+
+  document.getElementById('silkBtn').addEventListener('click', function(){
+    formSilk = !formSilk;
+    syncFormButtons();
+  });
+
+  document.querySelectorAll('[data-field="brand"]').forEach(function(b){
+    b.addEventListener('click', function(){
+      formBrand = b.dataset.value;
+      syncFormButtons();
+      if(formBrand === CUSTOM){ setTimeout(function(){ brandCustomInput.focus(); }, 50); }
+    });
+  });
   document.querySelectorAll('[data-field="material"]').forEach(function(b){ b.addEventListener('click', function(){ formMaterial = b.dataset.value; syncFormButtons(); }); });
   document.querySelectorAll('[data-field="shore"]').forEach(function(b){ b.addEventListener('click', function(){ formShore = b.dataset.value; syncFormButtons(); }); });
 
-  (function initPresets(){
-    var wrap = document.getElementById('presetColors');
-    wrap.innerHTML = PRESET_COLORS.map(function(c){
-      return '<button type="button" class="preset-swatch w-7 h-7 rounded-full border border-white/20" data-c="'+c+'" style="background:'+c+';"></button>';
+  // Palette
+  (function initPalette(){
+    var wrap = document.getElementById('paletteGrid');
+    wrap.innerHTML = PALETTE.map(function(p){
+      return '<button type="button" class="palette-swatch" title="' + esc(p[1]) + '" data-c="' + p[0] + '" data-n="' + esc(p[1]) + '" style="background:' + p[0] + ';"></button>';
     }).join('');
-    wrap.querySelectorAll('.preset-swatch').forEach(function(sw){
+    wrap.querySelectorAll('.palette-swatch').forEach(function(sw){
       sw.addEventListener('click', function(){
-        document.getElementById('colorInput').value = sw.dataset.c;
-        document.getElementById('hexInput').value = sw.dataset.c.toUpperCase();
+        setColor(sw.dataset.c);
+        var cur = colorNameInput.value.trim();
+        if(cur === "" || cur === lastAutoColorName){
+          colorNameInput.value = sw.dataset.n;
+          lastAutoColorName = sw.dataset.n;
+        }
       });
     });
   })();
 
-  var HEX_RE = /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/;
-
-  document.getElementById('colorInput').addEventListener('input', function(){
-    document.getElementById('hexInput').value = this.value.toUpperCase();
+  colorInput.addEventListener('input', function(){
+    hexInput.value = this.value.toUpperCase();
+    markSelectedSwatch();
   });
-
-  document.getElementById('hexInput').addEventListener('input', function(){
+  hexInput.addEventListener('input', function(){
     var v = this.value.trim();
-    if(!v.startsWith('#')) v = '#' + v;
+    if(v && v.charAt(0) !== '#') v = '#' + v;
     this.value = v.toUpperCase();
     if(HEX_RE.test(v)){
-      document.getElementById('colorInput').value = v;
+      colorInput.value = expandHex(v);
+      markSelectedSwatch();
     }
   });
 
@@ -458,28 +612,34 @@
   formOverlay.addEventListener('click', closeForm);
 
   document.getElementById('formSave').addEventListener('click', function(){
-    var color = document.getElementById('colorInput').value || PRESET_COLORS[0];
-    var colorName = document.getElementById('colorName').value.trim();
+    var brand = formBrand;
+    if(formBrand === CUSTOM){
+      brand = brandCustomInput.value.trim();
+      if(!brand){ toast('Впишите название бренда'); brandCustomInput.focus(); return; }
+    }
+    var color = colorInput.value || "#FF6A13";
+    var colorName = colorNameInput.value.trim();
 
     if(editingId){
       var sp = spools.find(function(s){ return s.id === editingId; });
       if(sp){
         var newFull = fullDurationMs(formMaterial);
         var eff = getEffectiveRemaining(sp);
-        sp.brand = formBrand;
+        sp.brand = brand;
         sp.material = formMaterial;
         sp.shore = formMaterial === 'TPU' ? formShore : null;
         sp.color = color;
         sp.colorName = colorName;
+        sp.silk = formSilk;
         sp.remainingMs = Math.min(eff, newFull);
         sp.lastUpdate = Date.now();
       }
       toast('Катушка обновлена');
     } else {
       spools.push({
-        id: uid(), brand: formBrand, material: formMaterial,
+        id: uid(), brand: brand, material: formMaterial,
         shore: formMaterial === 'TPU' ? formShore : null,
-        color: color, colorName: colorName,
+        color: color, colorName: colorName, silk: formSilk,
         inAMS: false, amsSlot: null,
         remainingMs: fullDurationMs(formMaterial), lastUpdate: Date.now()
       });
@@ -497,7 +657,7 @@
     ctxTargetId = spoolId;
     var sp = spools.find(function(s){ return s.id === spoolId; });
     if(!sp) return;
-    document.getElementById('ctxAmsLabel').textContent = sp.inAMS ? 'Убрать из AMS' : 'Поместить в AMS';
+    document.getElementById('ctxSlotLabel').textContent = sp.inAMS ? 'Убрать из слота' : 'Поместить в слот';
 
     menuOverlay.classList.remove('hidden');
     ctxMenu.classList.remove('hidden');
@@ -547,10 +707,10 @@
         sp.lastUpdate = Date.now();
         toast('Катушка просушена');
         render();
-      } else if(action === 'ams'){
+      } else if(action === 'slot'){
         if(sp.inAMS){
           moveToStorage(sp.id);
-          toast('Убрано из AMS');
+          toast('Убрано из слота');
           render();
         } else {
           placeFromMenu(sp.id);
@@ -559,11 +719,10 @@
     });
   });
 
-  /* ---------- AMS PLACEMENT LOGIC ---------- */
+  /* ---------- SLOT PLACEMENT LOGIC ---------- */
   function moveToStorage(id){
     var sp = spools.find(function(s){ return s.id === id; });
     if(!sp) return;
-    freezeAt(sp);
     sp.inAMS = false;
     sp.amsSlot = null;
   }
@@ -572,66 +731,67 @@
     var occupant = spools.find(function(s){ return s.inAMS && s.amsSlot === slotIndex && s.id !== id; });
     if(occupant){ moveToStorage(occupant.id); }
     var sp = spools.find(function(s){ return s.id === id; });
-    if(!sp.inAMS){ freezeAt(sp); }
     sp.inAMS = true;
     sp.amsSlot = slotIndex;
   }
 
-  // Used only by the context-menu "Поместить в AMS" action (no drop position available)
+  // Context-menu "Поместить в слот" (no drop position available)
   function placeFromMenu(id){
     var occupied = [false,false,false,false];
-    spools.forEach(function(s){ if(s.inAMS && s.amsSlot!=null){ occupied[s.amsSlot] = true; } });
+    spools.forEach(function(s){ if(s.inAMS && s.amsSlot != null){ occupied[s.amsSlot] = true; } });
     var emptySlots = [];
     occupied.forEach(function(v,i){ if(!v) emptySlots.push(i); });
 
     if(emptySlots.length > 0){
       placeInSlot(id, emptySlots[0]);
-      toast('Катушка помещена в AMS');
+      toast('Катушка в слоте ' + (emptySlots[0] + 1));
       render();
     } else {
       openSlotPicker(id);
     }
   }
 
-  // Used for drag & drop: resolves to the nearest slot under the pointer.
-  // If that slot is occupied, swaps (AMS<->AMS) or replaces it directly (storage->AMS) — no dialog.
-  function resolveAmsDrop(id, targetSlot){
+  // Drag & drop: nearest slot under the pointer. Occupied slot => swap (slot<->slot)
+  // or direct replacement (storage->slot), no dialog.
+  function resolveSlotDrop(id, targetSlot){
     var dragged = spools.find(function(s){ return s.id === id; });
     if(!dragged) return;
     var occupant = spools.find(function(s){ return s.inAMS && s.amsSlot === targetSlot && s.id !== id; });
-    var wasInAMS = dragged.inAMS;
+    var wasInSlot = dragged.inAMS;
     var originSlot = dragged.amsSlot;
 
     if(occupant){
-      if(wasInAMS && originSlot != null){
-        occupant.amsSlot = originSlot; // swap places
+      if(wasInSlot && originSlot != null){
+        occupant.amsSlot = originSlot;
       } else {
-        moveToStorage(occupant.id); // replace directly, occupant goes to storage
+        moveToStorage(occupant.id);
       }
     }
-    if(!wasInAMS){ freezeAt(dragged); }
     dragged.inAMS = true;
     dragged.amsSlot = targetSlot;
   }
 
-  function nearestSlotIndex(clientX){
-    var slotEls = document.querySelectorAll('#amsSlots > div');
+  // 2D nearest: slots are laid out in a 2x2 grid
+  function nearestSlotIndex(x, y){
+    var slotEls = document.querySelectorAll('#slotsGrid > div');
     var best = 0, bestDist = Infinity;
     slotEls.forEach(function(el, i){
       var r = el.getBoundingClientRect();
-      var c = r.left + r.width/2;
-      var d = Math.abs(c - clientX);
+      var cx = r.left + r.width/2, cy = r.top + r.height/2;
+      var d = (cx - x)*(cx - x) + (cy - y)*(cy - y);
       if(d < bestDist){ bestDist = d; best = i; }
     });
     return best;
   }
 
-  function dropOntoAMS(id, clientX){
-    var slot = nearestSlotIndex(clientX);
+  function dropOntoSlots(id, x, y){
     var dragged = spools.find(function(s){ return s.id === id; });
-    if(dragged.inAMS && dragged.amsSlot === slot){ render(); return; }
-    resolveAmsDrop(id, slot);
-    toast(dragged.inAMS ? 'Слоты обновлены' : 'Катушка помещена в AMS');
+    if(!dragged) { render(); return; }
+    var slot = nearestSlotIndex(x, y);
+    var wasInSlot = dragged.inAMS;
+    if(wasInSlot && dragged.amsSlot === slot){ render(); return; }
+    resolveSlotDrop(id, slot);
+    toast(wasInSlot ? 'Слоты обновлены' : 'Катушка в слоте ' + (slot + 1));
     render();
   }
 
@@ -640,21 +800,21 @@
   var slotPickerModal = document.getElementById('slotPickerModal');
 
   function openSlotPicker(newSpoolId){
-    pendingAmsSpoolId = newSpoolId;
+    pendingSlotSpoolId = newSpoolId;
     var list = document.getElementById('slotPickerList');
     var html = '';
     for(var i=0;i<4;i++){
       var occ = spools.find(function(s){ return s.inAMS && s.amsSlot === i; });
-      html += '<button data-slot="'+i+'" class="btn-press flex items-center justify-between px-4 py-3 rounded-2xl text-sm glass">' +
-        '<span>Слот '+(i+1)+'</span>' +
-        '<span style="color:var(--sub)">'+(occ ? (occ.brand + ' · ' + materialDisplay(occ)) : 'Пусто')+'</span>' +
+      html += '<button data-slot="' + i + '" class="btn-press flex items-center justify-between px-4 py-3 rounded-2xl text-sm glass">' +
+        '<span>Слот ' + (i+1) + '</span>' +
+        '<span style="color:var(--sub)">' + (occ ? (esc(occ.brand) + ' · ' + materialDisplay(occ)) : 'Пусто') + '</span>' +
       '</button>';
     }
     list.innerHTML = html;
     list.querySelectorAll('button[data-slot]').forEach(function(b){
       b.addEventListener('click', function(){
         var slot = parseInt(b.dataset.slot, 10);
-        placeInSlot(pendingAmsSpoolId, slot);
+        placeInSlot(pendingSlotSpoolId, slot);
         toast('Катушка заменена в слоте ' + (slot+1));
         closeSlotPicker();
         render();
@@ -672,7 +832,7 @@
       slotPickerModal.classList.add('hidden');
       slotPickerModal.classList.remove('flex');
     }, 200);
-    pendingAmsSpoolId = null;
+    pendingSlotSpoolId = null;
   }
   document.getElementById('slotPickerCancel').addEventListener('click', closeSlotPicker);
   slotPickerOverlay.addEventListener('click', closeSlotPicker);
@@ -724,7 +884,7 @@
 
     if(!drag.armed && !drag.active){
       // Cards use touch-action:none, so the browser never scrolls them natively —
-      // once movement looks like a swipe (before the long-press arms), we scroll manually.
+      // once movement looks like a swipe (before the long-press arms), scroll manually.
       if(drag.scrolling){
         window.scrollBy(0, drag.prevY - e.clientY);
         drag.prevY = e.clientY;
@@ -763,7 +923,7 @@
     drag.clone = clone;
 
     card.classList.add('card-ghost');
-    document.getElementById('amsZone').classList.add('drop-highlight');
+    document.getElementById('slotsZone').classList.add('drop-highlight');
     document.getElementById('storageZone').classList.add('drop-highlight');
   }
 
@@ -782,14 +942,12 @@
     if(drag.active){
       finishDrag(e);
     } else if(!drag.canceled && drag.id){
-      var dt = Date.now() - drag.startTime;
       var dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
-      var dist = Math.sqrt(dx*dx+dy*dy);
+      var dist = Math.sqrt(dx*dx + dy*dy);
       if(dist < MOVE_THRESHOLD){
         var el = drag.origEl;
         el.classList.remove('card-armed');
-        var rect = el.getBoundingClientRect();
-        openMenu(drag.id, rect);
+        openMenu(drag.id, el.getBoundingClientRect());
       }
     }
 
@@ -797,7 +955,7 @@
       drag.origEl.classList.remove('card-armed');
       drag.origEl.classList.remove('card-ghost');
     }
-    document.getElementById('amsZone').classList.remove('drop-highlight');
+    document.getElementById('slotsZone').classList.remove('drop-highlight');
     document.getElementById('storageZone').classList.remove('drop-highlight');
 
     drag = { active:false, armed:false, canceled:false, scrolling:false, id:null, startX:0, startY:0, startTime:0, prevY:0, timer:null, clone:null, origEl:null, offsetX:0, offsetY:0 };
@@ -813,8 +971,8 @@
     if(!sp || !zone){ render(); return; }
 
     var type = zone.dataset.dropzone;
-    if(type === 'ams'){
-      dropOntoAMS(id, e.clientX);
+    if(type === 'slots'){
+      dropOntoSlots(id, e.clientX, e.clientY);
     } else if(type === 'storage'){
       if(sp.inAMS){
         moveToStorage(id);
@@ -829,7 +987,7 @@
   /* ---------- INIT ---------- */
   load();
   render();
-  setInterval(render, 60000);
+  setInterval(function(){ if(!drag.id){ render(); } }, 60000);
 
 })();
 </script>
